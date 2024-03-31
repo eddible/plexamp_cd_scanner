@@ -1,0 +1,21 @@
+version: "3"
+services:
+  cd-scanner:
+    container_name: cd-scanner
+    restart: unless-stopped
+    build: ./cd-scanner
+    ports:
+      - "5000:5000"
+    environment:
+      DISCOGS_CONSUMER_KEY: ''
+      DISCOGS_CONSUMER_SECRET: ''
+      DISCOGS_APP_NAME: 'CD_Barcode_Scanner'
+      PLEX_DOMAIN: 'http://192.168.1.XX:32400'
+      PLEX_TOKEN: ''
+      PLEX_CLIENT: ''
+      PLEX_SECTION: 'Music'
+      HASS_DOMAIN: ''
+      HASS_SCENE: ''
+      HASS_TOKEN: ''
+      MUSICBRAINZ_APP_NAME: 'PlexAmpCDScanner'
+      MUSICBRAINZ_EMAIL: ''
