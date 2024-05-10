@@ -16,12 +16,12 @@ def power_on_amp():
     url = f"{os.getenv('HASS_DOMAIN')}/api/services/script/turn_on"
     data = {
         "entity_id": f"script.{os.getenv('HASS_SCENE')}"
-        }
+    }
     print(data)
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {os.getenv('HASS_TOKEN')}"
-               }
+    }
 
     r = requests.post(url, headers=headers, json=data, verify=False)
     print(r.text, file=sys.stderr)
@@ -77,6 +77,74 @@ def get_album_metadata(barcode):
         return f"An error occurred: {e}"
 
 
+def search_lms(artist, album_name):
+    album_title = f"{artist} - {album_name}"
+
+    print('Searching for', album_title, flush=True)
+
+    search_body = {
+        "id": 0,
+        "method": "slim.request",
+        "params": [
+            0,
+            [
+                "albums",
+                0,
+                20,
+                f"search:{album_name}",
+                "tags:la"
+            ]
+        ]
+    }
+
+    print(search_body, flush=True)
+
+    lms_url = os.getenv("LMS_URL")
+    lms_headers = {"Content-Type": "application/json"}
+
+    lms_query = requests.post(lms_url, headers=lms_headers, json=search_body)
+
+    print(lms_query.text, flush=True)
+
+    if lms_query:
+        lms_query = lms_query.json()
+        album_loop = lms_query.get('result', {}).get('albums_loop')
+        if album_loop:
+            print(album_loop, flush=True)
+            if len(album_loop) == 1:
+                top_result = album_loop[0][('id')]
+            elif len(album_loop) > 1:
+                top_result = [x['id'] for x in album_loop if artist in x['artist']]
+                if top_result:
+                    top_result = top_result[0]
+                else:
+                    located_artists = [x['artist'] for x in album_loop]
+                    unique_artists = set(located_artists)
+                    if len(unique_artists) == 1:
+                        top_result = [x['id'] for x in album_loop]
+                        top_result = top_result[0]
+                    else:
+                        return "Multiple results found but none matched the artist"
+            else:
+                return None
+
+            play_body = {
+                "id": 0,
+                "method": "slim.request",
+                "params": [
+                    os.getenv('LMS_PLAYER'),
+                    [
+                        "playlistcontrol",
+                        "cmd:load",
+                        f"album_id:{top_result}"
+                    ]
+                ]
+            }
+            print(play_body, flush=True)
+            lms_play_result = requests.post(lms_url, headers=lms_headers, json=play_body)
+            print(lms_play_result.text, flush=True)
+
+
 def search_plex(artist, album_name):
     baseurl = os.getenv("PLEX_DOMAIN")
     token = os.getenv("PLEX_TOKEN")
@@ -111,10 +179,19 @@ def handle_request(barcode):
     # power_on_amp()
     metadata = get_album_metadata(barcode)
     if isinstance(metadata, dict):
-        search_plex(metadata["artist"], metadata["album_name"])
+        # search_plex(metadata["artist"], metadata["album_name"])
+        search_lms(metadata["artist"], metadata["album_name"])
         return jsonify(metadata)
     else:
         return jsonify({"error": metadata}), 404
+
+
+@app.route("/<barcode>/test", methods=["GET"])
+def test_barcode(barcode):
+    power_on_amp()
+    metadata = get_album_metadata(barcode)
+    return jsonify(metadata)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
